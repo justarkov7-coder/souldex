@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+state_dir="${AI_REVIEW_STATE_DIR:-$HOME/.local/state/codex-claude-review}/runs"
+timeout="${AI_REVIEW_AWAIT_TIMEOUT_SECONDS:-960}"
+case "${1:-}" in
+  --latest) run_name="$(find "$state_dir" -mindepth 1 -maxdepth 1 -type d -print0 | xargs -0 -n1 basename | sort | tail -n1)" ;;
+  ?*) run_name="$1" ;;
+  *) echo "Usage: ai-review-await --latest | <run-name>" >&2; exit 2 ;;
+esac
+run_dir="$state_dir/$run_name"
+[[ -d "$run_dir" ]] || { echo "Unknown review run: $run_name" >&2; exit 2; }
+deadline=$(( $(date +%s) + timeout ))
+while (( $(date +%s) < deadline )); do
+  findings="$(find "$run_dir" -maxdepth 1 -type f -name 'findings-*.json' -size +0c | sort | tail -n1)"
+  [[ -z "$findings" ]] || { cat "$findings"; exit 0; }
+  sleep 5
+done
+echo "Timed out waiting for terminal Claude findings in $run_dir" >&2
+exit 124

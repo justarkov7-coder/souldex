@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+# Codex implementation + independent, read-only Claude review gate.
+set -euo pipefail
+umask 077
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+root_dir="$(cd "$script_dir/.." && pwd -P)"
+state_dir="${AI_REVIEW_STATE_DIR:-$HOME/.local/state/codex-claude-review}"
+codex_bin="${AI_REVIEW_CODEX_BIN:-codex}"
+claude_bin="${AI_REVIEW_CLAUDE_BIN:-claude}"
+repo="$PWD"; task=""; review_only=0; report_only=0; mode="auto"; dry_run=0
+run_dir=""; lock_dir=""
+
+say() { printf 'ai-review: %s\n' "$*" >&2; }
+die() { say "ERROR: $*"; exit 2; }
+usage() { cat <<'EOF'
+Usage: ai-review-loop [options] "task"
+
+  --repo PATH          Repository to implement or review (default: current directory)
+  --review-only        Do not invoke Codex; inspect the existing worktree
+  --report-only        Return one Claude verdict; requires --review-only
+  --fast | --deep      Force review depth (auto selects deep for risky diffs)
+  --dry-run            Check prerequisites and exit without calling a model
+  -h, --help           Show this help
+
+The normal interactive flow is:
+  ai-review-loop --repo /path/to/repo --review-only --report-only
+EOF
+}
+
+while (($#)); do
+  case "$1" in
+    --repo) repo="${2:?--repo needs a path}"; shift 2 ;;
+    --review-only) review_only=1; shift ;;
+    --report-only) report_only=1; shift ;;
+    --fast) mode=fast; shift ;;
+    --deep) mode=deep; shift ;;
+    --dry-run) dry_run=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    --) shift; task="$*"; break ;;
+    -*) die "Unknown option: $1" ;;
+    *) task="$*"; break ;;
+  esac
+done
+
+repo="$(cd "$repo" && pwd -P)" || die "Repository path does not exist"
+git -C "$repo" rev-parse --show-toplevel >/dev/null 2>&1 || die "Not a Git repository: $repo"
+[[ "$report_only" == 0 || "$review_only" == 1 ]] || die "--report-only requires --review-only"
+[[ "$review_only" == 0 || -n "$task" || "$dry_run" == 1 ]] || task="Review the current repository implementation and diff."
+[[ "$review_only" == 1 || -n "$task" || "$dry_run" == 1 ]] || die "A task is required unless --review-only is used"
+
+require() { command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"; }
+validate_prerequisites() {
+  require git; require jq; require python3; require "$claude_bin"
+  [[ -x "$script_dir/build-review-packet.py" ]] || die "Missing packet builder"
+  [[ -f "$root_dir/schemas/findings.schema.json" ]] || die "Missing findings schema"
+  [[ -f "$root_dir/prompts/claude-review.md" ]] || die "Missing Claude prompt"
+  if [[ "$review_only" == 0 ]]; then require "$codex_bin"; fi
+}
+validate_prerequisites
+if [[ "$dry_run" == 1 ]]; then say "dry-run passed: Git, jq, Python, Codex/Claude CLI and bundled assets are ready"; exit 0; fi
+
+acquire_lock() {
+  lock_dir="$(git -C "$repo" rev-parse --absolute-git-dir)/ai-review-loop.lock"
+  mkdir "$lock_dir" 2>/dev/null || die "Another review is already running for this repository"
+  trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT INT TERM
+}
+fingerprint() {
+  python3 - "$repo" <<'PY'
+import hashlib, subprocess, sys
+from pathlib import Path
+repo = Path(sys.argv[1]); digest = hashlib.sha256()
+command = ["git", "-C", str(repo), "diff", "--no-ext-diff", "--binary", "HEAD"]
+result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+if result.returncode == 0:
+    digest.update(result.stdout)
+else:
+    digest.update(subprocess.check_output(["git", "-C", str(repo), "diff", "--no-ext-diff", "--binary"]))
+    digest.update(subprocess.check_output(["git", "-C", str(repo), "diff", "--no-ext-diff", "--binary", "--cached"]))
+for raw in subprocess.check_output(["git", "-C", str(repo), "ls-files", "--others", "--exclude-standard", "-z"]).split(b"\0"):
+    if not raw: continue
+    path = repo / raw.decode("utf-8", "surrogateescape")
+    digest.update(raw)
+    if path.is_file() and not path.is_symlink(): digest.update(path.read_bytes())
+print(digest.hexdigest())
+PY
+}
+extract_verdict() {
+  local raw="$1" verdict="$2"
+  python3 - "$raw" "$verdict" <<'PY'
+import json, sys
+from pathlib import Path
+value = json.loads(Path(sys.argv[1]).read_text())
+value = value.get("structured_output", value.get("result", value)) if isinstance(value, dict) else value
+if isinstance(value, str):
+    decoder, choices = json.JSONDecoder(), []
+    for index, character in enumerate(value):
+        if character == "{":
+            try: candidate, _ = decoder.raw_decode(value[index:])
+            except json.JSONDecodeError: continue
+            if isinstance(candidate, dict) and set(candidate) == {"status", "summary", "findings"}: choices.append(candidate)
+    if not choices: raise SystemExit("No findings JSON object in Claude output")
+    value = choices[-1]
+Path(sys.argv[2]).write_text(json.dumps(value, indent=2) + "\n")
+PY
+  jq -e '
+    (keys | sort) == ["findings","status","summary"]
+    and (.status == "PASS" or .status == "FAIL")
+    and (.summary | type == "string" and length > 0)
+    and (.findings | type == "array")
+    and all(.findings[]; (keys | sort) == ["description","evidence","file","line","severity","suggested_validation","title"] and (.severity | IN("critical","high","medium","low")) and (.line | type == "number" and floor == . and . >= 1))
+    and ((.status == "PASS" and (.findings | length == 0)) or (.status == "FAIL" and (.findings | length > 0)))
+  ' "$verdict" >/dev/null
+}
+
+acquire_lock
+mkdir -p "$state_dir/runs"
+run_dir="$state_dir/runs/$(date -u +%Y%m%dT%H%M%SZ)-$$"
+mkdir -p "$run_dir"
+base="$(git -C "$repo" rev-parse --verify origin/main 2>/dev/null || git -C "$repo" rev-parse --verify HEAD 2>/dev/null || printf WORKTREE)"
+jq -n --arg task "$task" --arg repository "$repo" --arg base_ref "$base" --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{task:$task, repository:$repository, base_ref:$base_ref, created_at:$created_at}' > "$run_dir/manifest.json"
+
+if [[ "$review_only" == 0 ]]; then
+  say "Codex implementation"
+  "$codex_bin" exec -C "$repo" --sandbox workspace-write --ask-for-approval never --output-last-message "$run_dir/codex-initial.md" "Implement this task. Follow repository instructions, preserve unrelated changes, run relevant checks, and do not commit, push, or modify external systems. Task: $task" > "$run_dir/codex-initial.log" 2>&1 || die "Codex implementation failed; see $run_dir/codex-initial.log"
+fi
+
+"$script_dir/build-review-packet.py" --repo "$repo" --base "$base" --out "$run_dir" --mode "$mode" --task "$task"
+mode="$(jq -r .mode "$run_dir/scope.json")"
+packet="$(<"$run_dir/review-packet.md")"; diff="$(<"$run_dir/review-diff.patch")"
+template="$(<"$root_dir/prompts/claude-review.md")"
+prompt="${template//\{\{MODE\}\}/$mode}"
+prompt="${prompt//\{\{PACKET\}\}/$packet}"
+prompt="${prompt//\{\{DIFF\}\}/$diff}"
+prompt="${prompt//\{\{TASK\}\}/$task}"
+prompt="${prompt//\{\{AUDIT_RUNNER\}\}/no command runner is configured}"
+before="$(fingerprint)"
+say "Claude $mode independent review"
+tools=""; [[ "$mode" == deep ]] && tools="Read,Grep,Glob"
+set +e
+"$claude_bin" -p --setting-sources user --permission-mode dontAsk --no-session-persistence --output-format json --json-schema "$(<"$root_dir/schemas/findings.schema.json")" --disallowedTools "Edit,Write,NotebookEdit,WebFetch,WebSearch,AskUserQuestion,mcp__*" --tools "$tools" -- "$prompt" > "$run_dir/claude-review.raw.json"
+status=$?
+set -e
+[[ "$status" == 0 ]] || die "Claude review failed; see $run_dir/claude-review.raw.json"
+[[ "$(fingerprint)" == "$before" ]] || die "Repository changed during Claude review; verdict rejected"
+extract_verdict "$run_dir/claude-review.raw.json" "$run_dir/findings-1.json" || die "Claude output violated the findings contract"
+if [[ "$(jq -r .status "$run_dir/findings-1.json")" == PASS ]]; then
+  say "PASS; findings: $run_dir/findings-1.json"
+  exit 0
+fi
+say "FAIL; inspect findings: $run_dir/findings-1.json"
+exit 3

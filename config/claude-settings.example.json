@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": ["Read", "Grep", "Glob"],
+    "deny": ["Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch", "AskUserQuestion", "mcp__*"]
+  },
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "autoAllowBashIfSandboxed": false,
+    "allowUnsandboxedCommands": false,
+    "network": { "strictAllowlist": true, "allowedDomains": ["localhost", "127.0.0.1", "::1"] },
+    "filesystem": {
+      "allowWrite": ["/private/tmp"],
+      "denyRead": ["~/.ssh", "~/.aws", "~/.config/gcloud", "~/.kube", "~/.npmrc", "~/.pypirc"],
+      "denyWrite": ["~/.claude", "~/.local"]
+    },
+    "credentials": {
+      "envVars": [
+        { "name": "ANTHROPIC_API_KEY", "mode": "deny" },
+        { "name": "ANTHROPIC_AUTH_TOKEN", "mode": "deny" },
+        { "name": "GITHUB_TOKEN", "mode": "deny" },
+        { "name": "NPM_TOKEN", "mode": "deny" }
+      ]
+    }
+  }
+}
