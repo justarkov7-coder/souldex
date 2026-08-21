@@ -12,11 +12,17 @@ Every non-trivial request is classified before work starts:
 
 The challenge records the expected outcome, assumptions, and validation. It does not replace code analysis or tests.
 
-## 2. One writer
+## 2. Agent and inference routing
+
+Versioned skills live in `.codex/skills/`: `$intent-challenger`, `$adaptive-model-router`, and `$claude-review-gate`. They are the workflow orchestrator; no script replaces or downloads a model.
+
+The router keeps Terra/Medium as the primary writer. It reserves Luna/Low for targeted research or mechanical work, Terra/High for difficult diagnosis and review, and Sol/High for critical work (security, integrity, concurrency, migration, or architecture ambiguity). It stays single-agent when parallelism has no real benefit, limits delegation to four agents, and forbids two writers on the same files.
+
+## 3. One writer
 
 Codex is the only process allowed to modify the worktree. Claude is never granted editing, write, web, or MCP access. This separation avoids concurrent writes and makes the owner of each correction explicit.
 
-## 3. Bounded review packet
+## 4. Bounded review packet
 
 `build-review-packet.py` collects modified and untracked files, excludes heavy directories and `.env` files, then creates:
 
@@ -26,11 +32,11 @@ Codex is the only process allowed to modify the worktree. Claude is never grante
 
 Deep mode is selected automatically when a filename indicates a sensitive boundary, more than 12 source files change, or the diff exceeds 1,200 lines. These heuristics are guardrails, not a complete security classification.
 
-## 4. Independent verdict
+## 5. Independent verdict
 
 Claude must return only the JSON defined in `schemas/findings.schema.json`. The runner rejects incomplete formats, extra fields, and contradictory verdicts. It also checks that the Git worktree did not change during review.
 
-## 5. Correction loop
+## 6. Correction loop
 
 A `FAIL` stops the gate with exit code 3. The implementer:
 

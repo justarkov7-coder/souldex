@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claude Review Gate"
+  short_description: "Runs independent read-only Claude reviews"
+  default_prompt: "Use $claude-review-gate to review this substantial change."

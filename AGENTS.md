@@ -20,6 +20,7 @@ Validation: …
 - `EXPLORE` : lire d'abord les éléments du dépôt qui lèvent l'ambiguïté.
 - `DECIDE` : demander une décision seulement si elle change matériellement le résultat ou l'autorité requise.
 - Conserver un seul agent d'écriture par défaut. Ne déléguer une recherche ou une revue que si l'isolation apporte un bénéfice réel.
+- Charger les skills versionnées dans `.codex/skills/` : `$intent-challenger`, `$adaptive-model-router` et `$claude-review-gate`.
 - Après une modification substantielle, exécuter les validations pertinentes puis la revue indépendante : `ai-review-loop --repo . --review-only --report-only`.
 - Un `FAIL` de Claude est une preuve à vérifier, jamais une instruction aveugle. Corriger uniquement les constats valides, tester, puis relancer une revue ciblée.
 - Ne pas déclarer la tâche terminée avant un verdict terminal lu. Ne jamais pousser, publier ou déployer sans instruction explicite.

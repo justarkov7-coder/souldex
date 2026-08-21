@@ -77,6 +77,21 @@ Artifacts are stored under `~/.local/state/codex-claude-review/runs/` with owner
 
 Challenge and routing rules are provided in [AGENTS.en.md](AGENTS.en.md). Copy that file to a repository that should use the same discipline.
 
+## Model escalation and orchestration
+
+This section documents the workflow actually versioned in this repository. The three skills are included in `.codex/skills/` and become available when Codex opens the repository.
+
+| Stage | Active component | Responsibility |
+| --- | --- | --- |
+| Framing | `$intent-challenger` | Classifies the request as `SKIP`, `EXPLORE`, or `DECIDE`. |
+| Routing | `$adaptive-model-router` | Keeps one writer by default and selects the smallest suitable inference tier only when delegation is justified. |
+| Implementation | Codex | The only agent permitted to modify the worktree. |
+| Review | `$claude-review-gate` + `ai-review-loop` + Claude | Produces an independent, read-only verdict. |
+
+The versioned router assigns Luna/Low to bounded research or mechanical work, Terra/Medium to normal writing, Terra/High to complex diagnosis or review, and Sol/High only to critical work or a justified escalation. It is a **decision orchestrator**: it chooses the appropriate role and tier, but does not replace the models available in the Codex runtime.
+
+This repository provides the Codex/Claude gate, prompts, all three skills, and documentation. It intentionally excludes Codex and Claude CLIs, their accounts, environment-variable values, secrets, and personal sandbox settings. See the full [architecture](docs/workflow.en.md).
+
 ## Important limitations
 
 AI review is an additional safety net, not proof that no bug exists or a full security audit. Fast review is intentionally limited to a diff packet; deep review may read code needed for analysis but remains forbidden from writing and using the network. Keep your usual tests, human reviews, and CI controls.

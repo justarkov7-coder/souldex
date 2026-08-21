@@ -1,0 +1,4 @@
+interface:
+  display_name: "Adaptive Model Router"
+  short_description: "Routes agent work to the right tier"
+  default_prompt: "Use $adaptive-model-router to route this development task."

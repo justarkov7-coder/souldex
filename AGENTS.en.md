@@ -20,6 +20,7 @@ Validation: …
 - `EXPLORE`: read repository material first when it can resolve uncertainty.
 - `DECIDE`: ask only when a decision materially changes the result or required authority.
 - Keep one writing agent by default. Delegate research or review only when isolation has a real benefit.
+- Load the versioned skills in `.codex/skills/`: `$intent-challenger`, `$adaptive-model-router`, and `$claude-review-gate`.
 - After a substantial change, run appropriate checks and then the independent review: `ai-review-loop --repo . --review-only --report-only`.
 - A Claude `FAIL` is evidence to verify, never a blind instruction. Fix only valid findings, test, and run a focused review again.
 - Do not declare completion before reading a terminal verdict. Never push, publish, or deploy without explicit instruction.

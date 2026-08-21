@@ -100,6 +100,21 @@ verdict JSON validé. Ils ne doivent pas être ajoutés au dépôt applicatif.
 Les choix de challenge et de routage sont fournis dans [AGENTS.md](AGENTS.md).
 Copie ce fichier dans un dépôt qui doit adopter la même discipline.
 
+## Orchestration et escalade de modèles
+
+Cette section décrit le workflow réellement versionné dans ce dépôt. Les trois skills sont incluses dans `.codex/skills/` ; elles deviennent disponibles quand Codex ouvre le dépôt.
+
+| Étape | Composant actif | Rôle |
+| --- | --- | --- |
+| Cadrage | `$intent-challenger` | Classe la demande : `SKIP`, `EXPLORE` ou `DECIDE`. |
+| Routage | `$adaptive-model-router` | Garde un seul écrivain par défaut ; choisit le plus petit niveau d'inférence adapté si une délégation est justifiée. |
+| Implémentation | Codex | Seul agent autorisé à modifier le worktree. |
+| Revue | `$claude-review-gate` + `ai-review-loop` + Claude | Produit un verdict indépendant, en lecture seule. |
+
+Le routeur versionné prévoit Luna/Low pour une recherche ou une opération mécanique bornée, Terra/Medium pour l'écriture normale, Terra/High pour un diagnostic ou une revue complexe, et Sol/High uniquement pour un problème critique ou une escalade motivée. Il s'agit d'un **orchestrateur de décision** : il choisit le rôle et le niveau adaptés, mais ne remplace pas les modèles disponibles dans le runtime Codex.
+
+Ce dépôt fournit le gate Codex/Claude, les prompts, les trois skills et la documentation. Il ne contient volontairement pas les CLI Codex/Claude, leurs comptes, les valeurs de variables d'environnement, secrets ou réglages personnels de sandbox. Le détail complet est dans [l'architecture](docs/workflow.md).
+
 ## Limites importantes
 
 Une revue IA est un filet supplémentaire, pas une preuve d'absence de bug ni
