@@ -1,12 +1,12 @@
-# Workflow Codex + Claude
+# Codex + Claude workflow
 
 <p align="center">
-  <a href="AGENTS.md"><kbd>🇫🇷 Français</kbd></a>
+  <a href="docs/i18n/fr/AGENTS.md"><kbd>🇫🇷 Français</kbd></a>
   &nbsp;
-  <a href="AGENTS.en.md"><kbd>🇬🇧 English</kbd></a>
+  <a href="AGENTS.md"><kbd>🇬🇧 English</kbd></a>
 </p>
 
-Pour toute demande non triviale, commencer par ce triage concis :
+For every non-trivial request, start with this compact triage:
 
 ```text
 CHALLENGE — SKIP | READY | READY UNDER ASSUMPTIONS | NEEDS CLARIFICATION
@@ -16,11 +16,11 @@ Assumptions: …
 Validation: …
 ```
 
-- `SKIP` : modification mécanique, faible risque, validation évidente.
-- `EXPLORE` : lire d'abord les éléments du dépôt qui lèvent l'ambiguïté.
-- `DECIDE` : demander une décision seulement si elle change matériellement le résultat ou l'autorité requise.
-- Conserver un seul agent d'écriture par défaut. Ne déléguer une recherche ou une revue que si l'isolation apporte un bénéfice réel.
-- Charger les skills versionnées dans `.codex/skills/` : `$intent-challenger`, `$adaptive-model-router` et `$claude-review-gate`.
-- Après une modification substantielle, exécuter les validations pertinentes puis la revue indépendante : `ai-review-loop --repo . --review-only --report-only`.
-- Un `FAIL` de Claude est une preuve à vérifier, jamais une instruction aveugle. Corriger uniquement les constats valides, tester, puis relancer une revue ciblée.
-- Ne pas déclarer la tâche terminée avant un verdict terminal lu. Ne jamais pousser, publier ou déployer sans instruction explicite.
+- `SKIP`: a mechanical, low-risk change with obvious validation.
+- `EXPLORE`: read repository material first when it can resolve uncertainty.
+- `DECIDE`: ask only when a decision materially changes the result or required authority.
+- Keep one writing agent by default. Delegate research or review only when isolation has a real benefit.
+- Load the versioned skills in `.codex/skills/`: `$intent-challenger`, `$adaptive-model-router`, and `$claude-review-gate`.
+- After a substantial change, run appropriate checks and then the independent review: `ai-review-loop --repo . --review-only --report-only`.
+- A Claude `FAIL` is evidence to verify, never a blind instruction. Fix only valid findings, test, and run a focused review again.
+- Do not declare completion before reading a terminal verdict. Never push, publish, or deploy without explicit instruction.

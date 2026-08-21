@@ -1,134 +1,103 @@
 # Codex + Claude Review Gate
 
 <p align="center">
-  <a href="README.md"><kbd>🇫🇷 Français</kbd></a>
+  <a href="docs/i18n/fr/README.md"><kbd>🇫🇷 Français</kbd></a>
   &nbsp;
-  <a href="README.en.md"><kbd>🇬🇧 English</kbd></a>
+  <a href="README.md"><kbd>🇬🇧 English</kbd></a>
 </p>
 
-Un workflow local, public et portable pour faire collaborer Codex et Claude sur
-un dépôt Git sans leur donner le même rôle : **Codex est l'unique agent qui
-écrit ; Claude est un relecteur indépendant en lecture seule.**
+A local, public, portable workflow for letting Codex and Claude collaborate in a Git repository without assigning them the same role: **Codex is the only writer; Claude is an independent, read-only reviewer.**
 
-Le projet ne collecte aucune donnée et ne contient ni clé, ni compte, ni chemin
-propre à une machine. Les journaux de revue restent sur la machine de la
-personne qui lance la commande.
+The project collects no data and includes no key, account, or machine-specific path. Review logs remain on the computer that runs the command.
 
-## Pourquoi ce workflow ?
+## Why this workflow?
 
-Un modèle qui implémente puis « se relit » tend à partager ses propres angles
-morts. Cette boucle sépare les responsabilités : Codex produit et teste le
-changement, Claude cherche des défauts reproductibles dans un périmètre borné,
-puis Codex vérifie les constats avant toute correction.
+A model that implements a change and then reviews itself tends to share its own blind spots. This loop separates responsibilities: Codex builds and tests the change, Claude looks for reproducible defects within a bounded scope, and Codex verifies every finding before making a correction.
 
 ```mermaid
 flowchart TD
-    A[Demande] --> B{Challenge\nSKIP · EXPLORE · DECIDE}
-    B -->|Prête| C[Codex implémente et valide]
-    C --> D[Paquet de diff borné]
-    D --> E[Claude relit en lecture seule]
-    E -->|PASS| F[Livraison]
-    E -->|FAIL| G[Codex vérifie les constats]
-    G --> H[Corrige puis lance les tests]
+    A[Request] --> B{Challenge\nSKIP · EXPLORE · DECIDE}
+    B -->|Ready| C[Codex implements and validates]
+    C --> D[Bounded diff packet]
+    D --> E[Claude performs a read-only review]
+    E -->|PASS| F[Delivery]
+    E -->|FAIL| G[Codex verifies findings]
+    G --> H[Fixes and runs tests]
     H --> D
 ```
 
-Le schéma est un wireframe du protocole : il explicite le passage de main,
-l'unique boucle de correction et l'absence d'écriture côté Claude.
+This diagram is the workflow wireframe: it shows handoffs, the single correction loop, and the fact that Claude never writes.
 
 ## Installation
 
-Pré-requis : macOS ou Linux, Git, Python 3, `jq`, le CLI Codex et le CLI Claude
-installés et authentifiés. Claude doit disposer d'une configuration qui refuse
-les outils d'écriture ; voir [la configuration de sécurité](docs/security.md).
+Requirements: macOS or Linux, Git, Python 3, `jq`, and authenticated Codex and Claude CLIs. Claude must have a configuration that denies write tools; see the [security configuration](docs/security.md).
 
 ```bash
 git clone https://github.com/YOUR_ORG/codex-claude-review-gate.git
 cd codex-claude-review-gate
 bash install.sh
-ai-review-loop --repo /chemin/vers/un-projet --dry-run
+ai-review-loop --repo /path/to/a/project --dry-run
 ```
 
-L'installeur copie les ressources dans `~/.local/share/codex-claude-review-gate`
-et crée `ai-review-loop` et `ai-review-await` dans `~/.local/bin`. Ajoute ce
-dernier dossier à `PATH` si nécessaire.
+The installer copies resources to `~/.local/share/codex-claude-review-gate` and creates `ai-review-loop` and `ai-review-await` in `~/.local/bin`. Add that directory to `PATH` if needed.
 
-## Usage quotidien
+## Daily use
 
-Dans une session Codex interactive, après une modification substantielle :
+At the end of a substantial change in an interactive Codex session:
 
 ```bash
 ai-review-loop --repo . --review-only --report-only
 ```
 
-- `PASS` : aucun défaut significatif étayé n'a été trouvé dans le périmètre.
-- `FAIL` : ouvrir `findings-1.json`, confirmer chaque constat, corriger ceux qui
-  sont valides, exécuter les vérifications utiles, puis relancer la commande.
+- `PASS`: no evidence-backed significant defect was found within scope.
+- `FAIL`: open `findings-1.json`, confirm each finding, fix valid findings, run the relevant checks, then run the command again.
 
-Le mode autonome est également disponible ; Codex réalise l'implémentation,
-puis Claude la revoit. Il s'arrête sur `FAIL` pour laisser une personne ou la
-session Codex active examiner les éléments :
+Autonomous mode is also available. Codex implements the task, then Claude reviews it. It stops on `FAIL` so a person or active Codex session can assess the evidence:
 
 ```bash
-ai-review-loop --repo . "Ajouter la recherche dans la liste des projets"
+ai-review-loop --repo . "Add search to the project list"
 ```
 
-Forcer un niveau de revue :
+Force review depth:
 
 ```bash
 ai-review-loop --repo . --review-only --report-only --fast
 ai-review-loop --repo . --review-only --report-only --deep
 ```
 
-Les artefacts sont dans `~/.local/state/codex-claude-review/runs/` avec des
-permissions propriétaire seul : manifeste, paquet, diff, sortie brute et
-verdict JSON validé. Ils ne doivent pas être ajoutés au dépôt applicatif.
+Artifacts are stored under `~/.local/state/codex-claude-review/runs/` with owner-only permissions: manifest, packet, diff, raw output, and validated JSON verdict. They must not be added to an application repository.
 
-## Ce que fait le gate
+## What the gate does
 
-- construit un diff et une liste de fichiers, en excluant `.env`, artefacts de
-  build, dépendances et fichiers cachés sensibles ;
-- choisit une revue `fast` pour les petits changements et `deep` pour les zones
-  à risque (authentification, sécurité, persistance, SQL, API…), les gros diffs
-  et les changements nombreux ;
-- exige un schéma JSON strict (`PASS` ou `FAIL`, sévérité, fichier, ligne,
-  preuve et validation suggérée) ;
-- pose un verrou Git par dépôt et refuse un verdict si le worktree a changé
-  pendant la revue ;
-- n'effectue ni commit, ni push, ni pull request, ni déploiement.
+- builds a diff and file list while excluding `.env` files, build artifacts, dependencies, and sensitive hidden files;
+- selects `fast` review for small changes and `deep` review for risky areas (authentication, security, persistence, SQL, API), large diffs, or many changes;
+- requires a strict JSON schema (`PASS` or `FAIL`, severity, file, line, evidence, and suggested validation);
+- creates a per-repository Git lock and rejects a verdict if the worktree changes during the review;
+- never commits, pushes, opens pull requests, or deploys.
 
-Les choix de challenge et de routage sont fournis dans [AGENTS.md](AGENTS.md).
-Copie ce fichier dans un dépôt qui doit adopter la même discipline.
+Challenge and routing rules are provided in [AGENTS.md](AGENTS.md). Copy that file to a repository that should use the same discipline.
 
-## Orchestration et escalade de modèles
+## Model escalation and orchestration
 
-Cette section décrit le workflow réellement versionné dans ce dépôt. Les trois skills sont incluses dans `.codex/skills/` ; elles deviennent disponibles quand Codex ouvre le dépôt.
+This section documents the workflow actually versioned in this repository. The three skills are included in `.codex/skills/` and become available when Codex opens the repository.
 
-| Étape | Composant actif | Rôle |
+| Stage | Active component | Responsibility |
 | --- | --- | --- |
-| Cadrage | `$intent-challenger` | Classe la demande : `SKIP`, `EXPLORE` ou `DECIDE`. |
-| Routage | `$adaptive-model-router` | Garde un seul écrivain par défaut ; choisit le plus petit niveau d'inférence adapté si une délégation est justifiée. |
-| Implémentation | Codex | Seul agent autorisé à modifier le worktree. |
-| Revue | `$claude-review-gate` + `ai-review-loop` + Claude | Produit un verdict indépendant, en lecture seule. |
+| Framing | `$intent-challenger` | Classifies the request as `SKIP`, `EXPLORE`, or `DECIDE`. |
+| Routing | `$adaptive-model-router` | Keeps one writer by default and selects the smallest suitable inference tier only when delegation is justified. |
+| Implementation | Codex | The only agent permitted to modify the worktree. |
+| Review | `$claude-review-gate` + `ai-review-loop` + Claude | Produces an independent, read-only verdict. |
 
-Le routeur versionné prévoit Luna/Low pour une recherche ou une opération mécanique bornée, Terra/Medium pour l'écriture normale, Terra/High pour un diagnostic ou une revue complexe, et Sol/High uniquement pour un problème critique ou une escalade motivée. Il s'agit d'un **orchestrateur de décision** : il choisit le rôle et le niveau adaptés, mais ne remplace pas les modèles disponibles dans le runtime Codex.
+The versioned router assigns Luna/Low to bounded research or mechanical work, Terra/Medium to normal writing, Terra/High to complex diagnosis or review, and Sol/High only to critical work or a justified escalation. It is a **decision orchestrator**: it chooses the appropriate role and tier, but does not replace the models available in the Codex runtime.
 
-Ce dépôt fournit le gate Codex/Claude, les prompts, les trois skills et la documentation. Il ne contient volontairement pas les CLI Codex/Claude, leurs comptes, les valeurs de variables d'environnement, secrets ou réglages personnels de sandbox. Le détail complet est dans [l'architecture](docs/workflow.md).
+This repository provides the Codex/Claude gate, prompts, all three skills, and documentation. It intentionally excludes Codex and Claude CLIs, their accounts, environment-variable values, secrets, and personal sandbox settings. See the full [architecture](docs/workflow.md).
 
-## Limites importantes
+## Important limitations
 
-Une revue IA est un filet supplémentaire, pas une preuve d'absence de bug ni
-un audit de sécurité complet. La revue rapide est volontairement limitée à un
-paquet de diff ; la revue profonde peut lire le code nécessaire à l'analyse,
-mais conserve l'interdiction d'écrire et d'accéder au réseau. Conserve tes
-tests, la revue humaine et les contrôles CI habituels.
+AI review is an additional safety net, not proof that no bug exists or a full security audit. Fast review is intentionally limited to a diff packet; deep review may read code needed for analysis but remains forbidden from writing and using the network. Keep your usual tests, human reviews, and CI controls.
 
-Lis [l'architecture](docs/workflow.md), [le modèle de sécurité](docs/security.md)
-et [le guide de contribution](CONTRIBUTING.md) avant de modifier le lanceur.
-Leurs versions anglaises sont également disponibles :
-[architecture](docs/workflow.en.md), [sécurité](docs/security.en.md) et
-[contribution](CONTRIBUTING.en.md).
+Read the [architecture](docs/workflow.md), [security model](docs/security.md), and [contribution guide](CONTRIBUTING.md) before changing the runner.
 
-## Licence
+## License
 
 [MIT](LICENSE).

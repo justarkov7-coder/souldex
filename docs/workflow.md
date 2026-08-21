@@ -1,49 +1,49 @@
-# Architecture et protocole
+# Architecture and protocol
 
-[🇫🇷 Français](workflow.md) · [🇬🇧 English](workflow.en.md)
+[🇫🇷 Français](i18n/fr/workflow.md) · [🇬🇧 English](workflow.md)
 
-## 1. Challenge avant action
+## 1. Challenge before action
 
-Toute demande non triviale est classée avant le travail :
+Every non-trivial request is classified before work starts:
 
-- `SKIP` pour une modification courte, réversible et clairement vérifiable ;
-- `EXPLORE` lorsque la lecture du dépôt peut lever l'incertitude ;
-- `DECIDE` lorsqu'un choix de produit, de sécurité, de coût ou d'autorité est nécessaire.
+- `SKIP` for a small, reversible change with clear validation;
+- `EXPLORE` when reading repository material can resolve uncertainty;
+- `DECIDE` when a product, security, cost, or authority choice is required.
 
-Le challenge formule le résultat attendu, les hypothèses et la validation. Il ne remplace ni l'analyse de code ni les tests.
+The challenge records the expected outcome, assumptions, and validation. It does not replace code analysis or tests.
 
-## 2. Routage des agents et de l'inférence
+## 2. Agent and inference routing
 
-Les skills versionnées sont dans `.codex/skills/` : `$intent-challenger`, `$adaptive-model-router` et `$claude-review-gate`. Elles constituent l'orchestrateur du workflow ; aucun script ne remplace ou ne télécharge un modèle.
+Versioned skills live in `.codex/skills/`: `$intent-challenger`, `$adaptive-model-router`, and `$claude-review-gate`. They are the workflow orchestrator; no script replaces or downloads a model.
 
-Le routeur conserve Terra/Medium comme écrivain principal. Il réserve Luna/Low aux recherches ciblées ou opérations mécaniques, Terra/High aux diagnostics et revues difficiles, et Sol/High aux problèmes critiques (sécurité, intégrité, concurrence, migration ou ambiguïté d'architecture). Il reste mono-agent lorsque le parallélisme n'apporte aucun gain réel, limite la délégation à quatre agents, et interdit deux écrivains sur les mêmes fichiers.
+The router keeps Terra/Medium as the primary writer. It reserves Luna/Low for targeted research or mechanical work, Terra/High for difficult diagnosis and review, and Sol/High for critical work (security, integrity, concurrency, migration, or architecture ambiguity). It stays single-agent when parallelism has no real benefit, limits delegation to four agents, and forbids two writers on the same files.
 
-## 3. Un seul écrivain
+## 3. One writer
 
-Codex est l'unique processus autorisé à modifier le worktree. Claude ne reçoit jamais l'autorisation d'éditer, d'écrire, de naviguer sur le Web ou d'appeler des MCP. Cette séparation évite les écritures concurrentes et rend l'auteur de chaque correction explicite.
+Codex is the only process allowed to modify the worktree. Claude is never granted editing, write, web, or MCP access. This separation avoids concurrent writes and makes the owner of each correction explicit.
 
-## 4. Paquet de revue borné
+## 4. Bounded review packet
 
-`build-review-packet.py` collecte les fichiers modifiés et non suivis, exclut les répertoires lourds et les fichiers `.env`, puis génère :
+`build-review-packet.py` collects modified and untracked files, excludes heavy directories and `.env` files, then creates:
 
-- `review-packet.md`, la portée et les règles ;
-- `review-diff.patch`, un diff limité à 24 k caractères en rapide, 180 k en profond ;
-- `scope.json`, le mode, les fichiers, l'heuristique de risque et une empreinte SHA-256 de chaque fichier.
+- `review-packet.md`, the scope and rules;
+- `review-diff.patch`, a diff capped at 24k characters in fast mode and 180k in deep mode;
+- `scope.json`, the mode, files, risk heuristic, and SHA-256 fingerprint of each file.
 
-Le mode profond est choisi automatiquement lorsqu'un nom de fichier indique une frontière sensible, que plus de 12 fichiers source sont modifiés ou que le diff dépasse 1 200 lignes. Ces heuristiques sont des garde-fous, pas une classification de sécurité exhaustive.
+Deep mode is selected automatically when a filename indicates a sensitive boundary, more than 12 source files change, or the diff exceeds 1,200 lines. These heuristics are guardrails, not a complete security classification.
 
-## 5. Verdict indépendant
+## 5. Independent verdict
 
-Claude doit retourner uniquement le JSON défini dans `schemas/findings.schema.json`. Le lanceur rejette les formats incomplets, les champs supplémentaires et les verdicts contradictoires. Il vérifie également que l'état Git n'a pas changé pendant la revue.
+Claude must return only the JSON defined in `schemas/findings.schema.json`. The runner rejects incomplete formats, extra fields, and contradictory verdicts. It also checks that the Git worktree did not change during review.
 
-## 6. Boucle de correction
+## 6. Correction loop
 
-Un `FAIL` arrête le gate avec le code 3. L'agent ou la personne qui implémente :
+A `FAIL` stops the gate with exit code 3. The implementer:
 
-1. vérifie les preuves ;
-2. écarte les faux positifs ;
-3. corrige la cause racine des constats valides ;
-4. lance les tests adaptés ;
-5. relance une revue.
+1. verifies the evidence;
+2. discards false positives;
+3. fixes the root cause of valid findings;
+4. runs targeted checks;
+5. runs a review again.
 
-Le lanceur ne corrige pas automatiquement un `FAIL`. C'est un choix délibéré : une conclusion de revue n'est pas une instruction exécutable.
+The runner never automatically fixes a `FAIL`. This is deliberate: a review conclusion is not an executable instruction.

@@ -1,27 +1,27 @@
-# Modèle de sécurité
+# Security model
 
-[🇫🇷 Français](security.md) · [🇬🇧 English](security.en.md)
+[🇫🇷 Français](i18n/fr/security.md) · [🇬🇧 English](security.md)
 
-## Données et publication
+## Data and publication
 
-Ce dépôt ne doit contenir ni journaux de revue, ni `.env`, ni jeton, ni réglage Claude/Codex personnel. Les chemins utilisateur sont résolus à l'exécution via `$HOME` et les ressources du package sont résolues relativement au script.
+This repository must not contain review logs, `.env` files, tokens, or personal Claude/Codex settings. User paths are resolved through `$HOME` at runtime, and package resources are resolved relative to the scripts.
 
-Avant un fork ou une contribution, lance :
+Before creating a fork or contribution, run:
 
 ```bash
 git grep -nE '(/Users/|/home/|API[_-]?KEY|AUTH[_-]?TOKEN|GITHUB_TOKEN|BEGIN (RSA|OPENSSH))' || true
 ```
 
-Tout résultat doit être soit supprimé, soit un nom de variable documenté sans valeur. N'ajoute jamais les artefacts sous `~/.local/state/codex-claude-review`.
+Every result must either be removed or be a documented variable name with no value. Never add artifacts from `~/.local/state/codex-claude-review`.
 
-## Configuration Claude requise
+## Required Claude configuration
 
-Copie les principes de `config/claude-settings.example.json` dans la configuration Claude de ton choix : sandbox activée, échec si elle est indisponible, écriture refusée et identifiants cloud/registre refusés. Ajuste les chemins temporaires pour ton système. Ne copie pas un fichier de réglages personnel dans ce dépôt.
+Apply the principles from `config/claude-settings.example.json` to your Claude configuration: sandbox enabled, failure when unavailable, write denied, and cloud or registry credentials denied. Adjust temporary paths for your operating system. Never copy a personal settings file into this repository.
 
-Le lanceur passe aussi `--disallowedTools` pour bloquer les outils d'écriture, le Web, les questions interactives et les MCP. Cette défense en profondeur ne remplace pas la configuration de sandbox : le `--dry-run` vérifie seulement les CLI et ressources locales ; confirme aussi visuellement que ta configuration Claude applique la sandbox.
+The runner also passes `--disallowedTools` to block write tools, web access, interactive questions, and MCP. This defense in depth does not replace sandbox configuration: `--dry-run` only checks local CLIs and bundled resources, so also confirm that your Claude configuration enables the sandbox.
 
-## Frontières assumées
+## Explicit boundaries
 
-- Claude reçoit le prompt, le paquet et le diff de revue : ne l'utilise pas sur du code ou des données que ta politique interdit d'envoyer au fournisseur.
-- Le mode profond peut lire les fichiers nécessaires à l'analyse dans la sandbox Claude. Le mode rapide n'utilise aucun outil.
-- Les vérifications CI et une revue humaine restent nécessaires pour les changements critiques.
+- Claude receives the review prompt, packet, and diff. Do not use it on code or data your policy forbids sending to the provider.
+- Deep mode may read files needed for analysis inside the Claude sandbox. Fast mode uses no tools.
+- CI checks and human review remain necessary for critical changes.
